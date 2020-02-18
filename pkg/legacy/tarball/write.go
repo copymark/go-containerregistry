@@ -198,6 +198,7 @@ func MultiWrite(refToImage map[name.Reference]v1.Image, w io.Writer) error {
 	var m tarball.Manifest
 	repos := make(repositoriesTarDescriptor)
 
+	seenLayerDigests := make(map[string]struct{})
 	for img, tags := range imageToTags {
 		// Write the config.
 		cfgName, err := img.ConfigName()
@@ -235,9 +236,16 @@ func MultiWrite(refToImage map[name.Reference]v1.Image, w io.Writer) error {
 		layerFiles := make([]string, len(layers))
 		var prev *v1Layer
 		for i, l := range layers {
+			lhex := l.Digest().Hex
+			if _, ok := seenLayerDigests[lhex]; ok {
+				continue
+			}
+			seenLayerDigests[lhex] = struct{}{}
+
 			if err := updateLayerSources(layerSources, l, img); err != nil {
 				return fmt.Errorf("unable to update image metadata to include undistributable layer source information: %v", err)
 			}
+
 			var cur *v1Layer
 			if i < (len(layers) - 1) {
 				cur, err = newV1Layer(l, prev, history[i])
